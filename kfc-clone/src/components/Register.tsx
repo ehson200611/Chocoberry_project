@@ -118,7 +118,7 @@ export default function Register({ onClose, onSuccess, onSwitchToLogin }: Regist
                 setFormData({ ...formData, phone: e.target.value })
               }
               className="w-full px-4 py-2 rounded-xl border border-white/30 bg-white/20 text-gray-900 placeholder:text-gray-400 shadow-[0_10px_25px_rgba(15,23,42,0.15)] focus:ring-2 focus:ring-red-400 focus:border-transparent focus:bg-white/80 backdrop-blur-md transition-all duration-200"
-              placeholder="+992 XX XXX-XX-XX"
+              placeholder="+992 501 07 77 03"
             />
           </div>
 

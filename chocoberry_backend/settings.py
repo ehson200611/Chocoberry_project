@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-%hy_&u$+%o8*dql5b+4xu7ia!-jks*8hb$3r2elc*is9ma_bo2
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']  # В продакшене заменить на конкретные домены
 
 
 # Application definition
@@ -79,8 +79,12 @@ WSGI_APPLICATION = 'chocoberry_backend.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'chocoberry_db',
+        'USER': 'chocoberry_user',
+        'PASSWORD': 'Chocoberry2026!',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 
@@ -152,15 +156,34 @@ REST_FRAMEWORK = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://chocoberry.tj",
+    "https://www.chocoberry.tj",
+    "http://chocoberry.tj",
+    "http://www.chocoberry.tj",
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True  # Для разработки, в продакшене убрать
+CORS_ALLOW_ALL_ORIGINS = True  # Для разработки, в продакшене можно убрать
 CORS_ALLOW_CREDENTIALS = True  # Разрешаем отправку cookies для сессий
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # CSRF settings для разработки
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'https://chocoberry.tj',
+    'https://www.chocoberry.tj',
+    'http://chocoberry.tj',
+    'http://www.chocoberry.tj',
 ]
 CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_HTTPONLY = False

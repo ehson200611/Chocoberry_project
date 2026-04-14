@@ -10,125 +10,119 @@ interface NewItemsCarouselProps {
 
 export default function NewItemsCarousel({ items }: NewItemsCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [animating, setAnimating] = useState(false);
 
   useEffect(() => {
-    if (items.length === 0) return;
-
+    if (items.length <= 1) return;
     const interval = setInterval(() => {
-      setCurrentIndex((prevIndex) => (prevIndex + 1) % items.length);
-    }, 7000); // Меняется каждые 7 секунд
-
+      goTo((prev) => (prev + 1) % items.length);
+    }, 6000);
     return () => clearInterval(interval);
   }, [items.length]);
 
-  if (items.length === 0) {
-    return null;
-  }
+  const goTo = (indexOrFn: number | ((prev: number) => number)) => {
+    if (animating) return;
+    setAnimating(true);
+    setCurrentIndex(indexOrFn as number);
+    setTimeout(() => setAnimating(false), 600);
+  };
+
+  if (items.length === 0) return null;
 
   const currentItem = items[currentIndex];
 
   return (
-    <section className="mb-12 relative overflow-hidden rounded-3xl shadow-2xl">
-      <div className="relative h-64 sm:h-80 md:h-96 lg:h-[500px]">
-        {/* Фоновое изображение */}
+    <div className="relative rounded-3xl overflow-hidden shadow-2xl" style={{ minHeight: "260px" }}>
+      {/* Background image or gradient */}
+      <div className="absolute inset-0">
         {currentItem.background_image_url ? (
-          <div className="absolute inset-0">
-            <Image
-              src={currentItem.background_image_url}
-              alt={currentItem.title}
-              fill
-              className="object-cover transition-opacity duration-1000"
-              priority={currentIndex === 0}
-            />
-            {/* Затемнение для лучшей читаемости текста */}
-            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/40 to-black/60"></div>
-          </div>
+          <Image
+            src={currentItem.background_image_url}
+            alt={currentItem.title}
+            fill
+            className="object-cover transition-all duration-700"
+            priority={currentIndex === 0}
+          />
         ) : (
-          <div className="absolute inset-0 bg-gradient-to-r from-red-600 via-pink-600 to-red-600"></div>
+          <div style={{ background: "linear-gradient(135deg,#6b0000,#dc2626,#db2777)", width: "100%", height: "100%" }} />
         )}
+        {/* Overlay */}
+        <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.55) 100%)" }} />
+      </div>
 
-        {/* Контент */}
-        <div className="relative h-full">
-          {/* Надпись NEW в верхнем углу */}
-          <div className="absolute top-4 right-4 bg-gradient-to-r from-red-600 to-pink-600 text-white px-3 py-1.5 rounded-full text-xs sm:text-sm font-bold shadow-lg">
-            NEW
+      {/* Content */}
+      <div className="relative h-64 sm:h-80 md:h-96 flex flex-col justify-between p-5 sm:p-8">
+        {/* Top row */}
+        <div className="flex items-start justify-between">
+          <div
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black shadow-lg"
+            style={{ background: "linear-gradient(to right,#dc2626,#db2777)", color: "#fff" }}
+          >
+            ✨ НОВИНКА
           </div>
-          
-          {/* Надпись внизу в углу */}
-          <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm text-white px-4 py-2 rounded-lg text-sm sm:text-base font-semibold">
-            {currentItem.title}
-          </div>
-
-          {/* Индикаторы */}
+          {/* Dot indicators */}
           {items.length > 1 && (
-            <div className="absolute bottom-4 right-4 flex gap-2">
-              {items.map((_, index) => (
+            <div className="flex gap-1.5">
+              {items.map((_, i) => (
                 <button
-                  key={index}
-                  onClick={() => setCurrentIndex(index)}
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    index === currentIndex
-                      ? "w-8 bg-white"
-                      : "w-2 bg-white/50 hover:bg-white/75"
-                  }`}
-                  aria-label={`Перейти к слайду ${index + 1}`}
+                  key={i}
+                  onClick={() => goTo(i)}
+                  className="rounded-full transition-all duration-300 focus:outline-none"
+                  style={{
+                    width: i === currentIndex ? "24px" : "8px",
+                    height: "8px",
+                    background: i === currentIndex ? "#fff" : "rgba(255,255,255,0.45)",
+                  }}
+                  aria-label={`Слайд ${i + 1}`}
                 />
               ))}
             </div>
           )}
+        </div>
 
-          {/* Стрелки навигации (опционально) */}
+        {/* Bottom content */}
+        <div className="flex items-end justify-between gap-4">
+          <div className="flex-1">
+            <h3
+              className="text-white font-black text-xl sm:text-3xl mb-2 drop-shadow-lg"
+              style={{ textShadow: "0 2px 12px rgba(0,0,0,0.5)" }}
+            >
+              {currentItem.title}
+            </h3>
+            {currentItem.description && (
+              <p className="text-white/75 text-sm sm:text-base line-clamp-2 max-w-md">
+                {currentItem.description}
+              </p>
+            )}
+          </div>
+
+          {/* Nav arrows */}
           {items.length > 1 && (
-            <>
+            <div className="flex gap-2 flex-shrink-0">
               <button
-                onClick={() =>
-                  setCurrentIndex((prev) => (prev - 1 + items.length) % items.length)
-                }
-                className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/20 hover:bg-white/30 text-white p-2 rounded-full transition-all"
-                aria-label="Предыдущий слайд"
+                onClick={() => goTo((currentIndex - 1 + items.length) % items.length)}
+                className="w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90"
+                style={{ background: "rgba(255,255,255,0.2)", color: "#fff", backdropFilter: "blur(4px)" }}
+                aria-label="Назад"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 19l-7-7 7-7"
-                  />
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
               <button
-                onClick={() =>
-                  setCurrentIndex((prev) => (prev + 1) % items.length)
-                }
-                className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/20 hover:bg-white/30 text-white p-2 rounded-full transition-all"
-                aria-label="Следующий слайд"
+                onClick={() => goTo((currentIndex + 1) % items.length)}
+                className="w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90"
+                style={{ background: "rgba(255,255,255,0.2)", color: "#fff", backdropFilter: "blur(4px)" }}
+                aria-label="Вперёд"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5l7 7-7 7"
-                  />
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
-            </>
+            </div>
           )}
         </div>
       </div>
-    </section>
+    </div>
   );
 }
-

@@ -24,7 +24,7 @@ export default function Footer() {
   const isSuperuser = currentUser?.is_superuser || false;
 
   return (
-    <footer className="bg-gradient-to-r from-red-800 to-pink-800 text-white mt-16">
+    <footer className="text-white mt-16" style={{background: 'linear-gradient(to right, #991b1b, #9d174d)'}}>
       <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
@@ -55,7 +55,7 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold mb-4">Контакты</h4>
             <ul className="space-y-2 text-red-200 text-sm">
-              <li>📞 +992 (93) 123-45-67</li>
+              <li>📞 <a href="tel:+992501077703" className="hover:underline">+992 501 07 77 03</a></li>
               <li>📧 info@chocoberry.tj</li>
               <li>📍 Душанбе, Таджикистан</li>
             </ul>

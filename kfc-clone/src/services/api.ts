@@ -1,10 +1,29 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+// Определяем API URL: используем относительный путь в браузере
+const getApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    // В браузере - используем относительный путь (Nginx проксирует)
+    return '/api';
+  }
+  // Для SSR
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+};
+
+// Функция для получения API URL (всегда актуальный)
+const getApiUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    // Используем относительный путь - это работает надежнее
+    return '/api';
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Получаем CSRF токен из cookies
 function getCsrfToken(): string | null {
   if (typeof document === 'undefined') return null;
   const cookies = document.cookie.split(';');
-  for (let cookie of cookies) {
+  for (const cookie of cookies) {
     const [name, value] = cookie.trim().split('=');
     if (name === 'csrftoken') {
       return decodeURIComponent(value);
@@ -27,16 +46,30 @@ export interface ApiProduct {
 export const api = {
   async getProducts(): Promise<ApiProduct[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/products/`, {
+      // Используем Next.js API route для проксирования
+      const apiUrl = '/api/products/';
+      console.log('🔄 Fetching products from:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
+        cache: 'no-store', // Отключаем кеш
       });
+      
+      console.log('✅ Response received:', response.status, response.statusText);
+      
       if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        console.error(`❌ API Error: HTTP ${response.status} - ${response.statusText}`, errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
       const data = await response.json();
+      const count = Array.isArray(data) ? data.length : (data.results ? data.results.length : 0);
+      console.log('✅ Products loaded:', count);
+      
       // Обработка пагинации DRF
       if (data.results) {
         return data.results;
@@ -45,15 +78,23 @@ export const api = {
       if (Array.isArray(data)) {
         return data;
       }
+      console.warn('⚠️ Unexpected API response format:', data);
       return [];
     } catch (error) {
-      console.error('API Error:', error);
+      console.error('❌ API Error fetching products:', error);
+      console.error('Error details:', {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      // Пробрасываем ошибку, чтобы компонент мог обработать её
       throw error;
     }
   },
 
   async getProduct(id: number): Promise<ApiProduct> {
-    const response = await fetch(`${API_BASE_URL}/products/${id}/`);
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/products/${id}/`);
     if (!response.ok) {
       throw new Error('Failed to fetch product');
     }
@@ -69,7 +110,8 @@ export const api = {
       formData.append('image', imageFile);
     }
     
-    const response = await fetch(`${API_BASE_URL}/products/`, {
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/products/`, {
       method: 'POST',
       body: formData,
     });
@@ -94,7 +136,8 @@ export const api = {
       headers['X-CSRFToken'] = csrfToken;
     }
     
-    const response = await fetch(`${API_BASE_URL}/products/${id}/`, {
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/products/${id}/`, {
       method: 'PATCH',
       credentials: 'include',
       headers,
@@ -111,7 +154,8 @@ export const api = {
     const formData = new FormData();
     formData.append('image', imageFile);
     
-    const response = await fetch(`${API_BASE_URL}/products/${productId}/`, {
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/products/${productId}/`, {
       method: 'PATCH',
       body: formData,
     });
@@ -122,7 +166,8 @@ export const api = {
   },
 
   async deleteProduct(id: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/products/${id}/`, {
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/products/${id}/`, {
       method: 'DELETE',
     });
     if (!response.ok) {
@@ -145,7 +190,8 @@ export interface UserProfile {
 export const profileApi = {
   async getProfileByPhone(phone: string): Promise<UserProfile | null> {
     try {
-      const response = await fetch(`${API_BASE_URL}/profiles/by_phone/?phone=${encodeURIComponent(phone)}`, {
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/profiles/by_phone/?phone=${encodeURIComponent(phone)}`, {
         credentials: 'include',
       });
       if (response.status === 404) {
@@ -190,13 +236,19 @@ export interface NewItem {
 export const newItemsApi = {
   async getNewItems(): Promise<NewItem[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/new-items/`, {
+      const apiUrl = '/api';
+      const response = await fetch(`${apiUrl}/new-items/`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
         credentials: 'include',
       });
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        console.error(`New Items API Error: HTTP ${response.status} - ${response.statusText}`);
+        return [];
       }
       const data = await response.json();
+      console.log('New items loaded:', Array.isArray(data) ? data.length : (data.results ? data.results.length : 0));
       // Обработка пагинации DRF
       if (data.results) {
         return data.results;
@@ -225,7 +277,8 @@ export interface EditableContent {
 export const editableContentApi = {
   async getByKey(key: string): Promise<string> {
     try {
-      const response = await fetch(`${API_BASE_URL}/editable-content/by_key/?key=${encodeURIComponent(key)}`, {
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/editable-content/by_key/?key=${encodeURIComponent(key)}`, {
         credentials: 'include',
       });
       if (!response.ok) {
@@ -240,7 +293,8 @@ export const editableContentApi = {
   },
 
   async save(key: string, content: string, page?: string): Promise<EditableContent> {
-    const response = await fetch(`${API_BASE_URL}/editable-content/`, {
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/editable-content/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -256,6 +310,202 @@ export const editableContentApi = {
   },
 };
 
+export interface Order {
+  id: number;
+  name: string;
+  phone: string;
+  address: string;
+  total_price: string;
+  created_at: string;
+  status?: string;
+  items?: { id: number; name: string; quantity: number; price: string; total: string }[];
+}
+
+export const ordersApi = {
+  async getMyOrders(): Promise<Order[]> {
+    try {
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/orders/`, {
+        credentials: 'include',
+      });
+      if (!response.ok) return [];
+      const data = await response.json();
+      if (data.results) return data.results;
+      if (Array.isArray(data)) return data;
+      return [];
+    } catch {
+      return [];
+    }
+  },
+};
+
+export interface AdminStats {
+  total_users: number;
+  total_orders: number;
+}
+
+export interface AdminOrder {
+  id: number;
+  name: string;
+  phone: string;
+  address: string;
+  items: { name: string; quantity: number; price: string }[];
+  total_price: string;
+  status: string;
+  created_at: string;
+}
+
+export interface AdminUser {
+  id: number;
+  username: string;
+  email: string;
+  name: string;
+  phone: string;
+  address: string;
+  photo_url: string | null;
+  is_superuser: boolean;
+  is_active: boolean;
+  orders_count: number;
+  orders_sum: string;
+  date_joined: string;
+}
+
+export const adminApi = {
+  async getStats(): Promise<AdminStats | null> {
+    try {
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/auth/admin_stats/`, {
+        credentials: 'include',
+      });
+      if (!response.ok) return null;
+      return response.json();
+    } catch {
+      return null;
+    }
+  },
+
+  async getAllOrders(): Promise<{ orders: AdminOrder[]; total: number; total_sum: string; pending: number; completed: number }> {
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/auth/admin_all_orders/`, {
+      credentials: 'include',
+    });
+    if (!response.ok) throw new Error('Forbidden');
+    return response.json();
+  },
+
+  async getAllUsers(): Promise<{ users: AdminUser[]; total: number }> {
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/auth/admin_all_users/`, {
+      credentials: 'include',
+    });
+    if (!response.ok) throw new Error('Forbidden');
+    return response.json();
+  },
+
+  async updateOrderStatus(orderId: number, newStatus: string): Promise<void> {
+    const csrfToken = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/auth/admin_update_order_status/`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify({ order_id: orderId, status: newStatus }),
+    });
+    if (!response.ok) throw new Error('Failed to update status');
+  },
+};
+
+// ─── CHAT ─────────────────────────────────────────
+export interface ChatMsg {
+  id: number;
+  message: string;
+  sender: 'client' | 'admin';
+  created_at: string;
+  is_read: boolean;
+}
+
+export interface ChatUser {
+  user_id: number;
+  username: string;
+  name: string;
+  phone: string;
+  unread: number;
+  last_message: string;
+  last_time: string;
+  last_sender: string;
+}
+
+export const chatApi = {
+  async getMyMessages(): Promise<ChatMsg[]> {
+    try {
+      const apiUrl = getApiUrl();
+      const r = await fetch(`${apiUrl}/auth/my_chat/`, { credentials: 'include' });
+      if (!r.ok) return [];
+      const d = await r.json();
+      return d.messages || [];
+    } catch { return []; }
+  },
+
+  async sendMessage(text: string): Promise<ChatMsg | null> {
+    try {
+      const csrfToken = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+      const apiUrl = getApiUrl();
+      const r = await fetch(`${apiUrl}/auth/my_chat/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ message: text }),
+      });
+      if (!r.ok) return null;
+      return r.json();
+    } catch { return null; }
+  },
+
+  async getUnreadCount(): Promise<number> {
+    try {
+      const apiUrl = getApiUrl();
+      const r = await fetch(`${apiUrl}/auth/chat_unread/`, { credentials: 'include' });
+      if (!r.ok) return 0;
+      const d = await r.json();
+      return d.count || 0;
+    } catch { return 0; }
+  },
+
+  async getAdminChats(): Promise<ChatUser[]> {
+    try {
+      const apiUrl = getApiUrl();
+      const r = await fetch(`${apiUrl}/auth/admin_chats/`, { credentials: 'include' });
+      if (!r.ok) return [];
+      const d = await r.json();
+      return d.chats || [];
+    } catch { return []; }
+  },
+
+  async getAdminChatMessages(userId: number): Promise<{ messages: ChatMsg[]; user_name: string }> {
+    try {
+      const apiUrl = getApiUrl();
+      const r = await fetch(`${apiUrl}/auth/admin_chat_messages/?user_id=${userId}`, { credentials: 'include' });
+      if (!r.ok) return { messages: [], user_name: '' };
+      return r.json();
+    } catch { return { messages: [], user_name: '' }; }
+  },
+
+  async adminReply(userId: number, text: string): Promise<ChatMsg | null> {
+    try {
+      const csrfToken = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+      const apiUrl = getApiUrl();
+      const r = await fetch(`${apiUrl}/auth/admin_chat_messages/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ user_id: userId, message: text }),
+      });
+      if (!r.ok) return null;
+      return r.json();
+    } catch { return null; }
+  },
+};
+
 export const authApi = {
   async register(data: {
     username: string;
@@ -266,7 +516,8 @@ export const authApi = {
     phone: string;
     address?: string;
   }): Promise<AuthResponse> {
-    const response = await fetch(`${API_BASE_URL}/auth/register/`, {
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/auth/register/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -282,7 +533,8 @@ export const authApi = {
   },
 
   async login(username: string, password: string): Promise<AuthResponse> {
-    const response = await fetch(`${API_BASE_URL}/auth/login/`, {
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/auth/login/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -291,14 +543,25 @@ export const authApi = {
       body: JSON.stringify({ username, password }),
     });
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || JSON.stringify(errorData));
+      const errorData = await response.json().catch(() => ({}));
+      // Обработка разных форматов ошибок
+      if (errorData.error) {
+        throw new Error(errorData.error);
+      }
+      if (errorData.detail) {
+        throw new Error(errorData.detail);
+      }
+      if (errorData.non_field_errors && Array.isArray(errorData.non_field_errors)) {
+        throw new Error(errorData.non_field_errors[0]);
+      }
+      throw new Error(errorData.message || 'Ошибка при входе');
     }
     return response.json();
   },
 
   async logout(): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/auth/logout/`, {
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/auth/logout/`, {
       method: 'POST',
       credentials: 'include',
     });
@@ -309,7 +572,8 @@ export const authApi = {
 
   async getCurrentUser(): Promise<User | null> {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/me/`, {
+      const apiUrl = '/api';
+      const response = await fetch(`${apiUrl}/auth/me/`, {
         credentials: 'include',
       });
       if (response.status === 401) {

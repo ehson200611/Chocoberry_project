@@ -4,7 +4,14 @@ import { useState, useEffect } from "react";
 import { useCart } from "../context/CartContext";
 import { api, authApi } from "../services/api";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+// Используем относительный путь в браузере, localhost для SSR
+const getApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    return '/api';
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+};
+const API_BASE_URL = getApiBaseUrl();
 
 interface OrderFormProps {
   onClose: () => void;
@@ -69,8 +76,8 @@ export default function OrderForm({ onClose, onSuccess }: OrderFormProps) {
         total_price: totalPrice.toString(),
       };
 
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-      const response = await fetch(`${API_BASE_URL}/orders/`, {
+      const apiUrl = typeof window !== 'undefined' ? '/api' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api');
+      const response = await fetch(`${apiUrl}/orders/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -80,8 +87,14 @@ export default function OrderForm({ onClose, onSuccess }: OrderFormProps) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Ошибка при оформлении заказа");
+        const errorText = await response.text().catch(() => '');
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || `Ошибка ${response.status}` };
+        }
+        throw new Error(errorData.detail || errorData.error || `Ошибка ${response.status}: ${response.statusText}`);
       }
 
       // Профиль создается автоматически на бэкенде
@@ -89,7 +102,9 @@ export default function OrderForm({ onClose, onSuccess }: OrderFormProps) {
       onSuccess(data.phone); // Передаем телефон для загрузки профиля
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Произошла ошибка");
+      const errorMessage = err instanceof Error ? err.message : "Произошла ошибка при оформлении заказа";
+      console.error('Order submission error:', err);
+      setError(errorMessage);
       setAutoSubmitting(false);
     } finally {
       setLoading(false);
@@ -104,7 +119,7 @@ export default function OrderForm({ onClose, onSuccess }: OrderFormProps) {
   // Если автоматически отправляем заказ, показываем загрузку
   if (autoSubmitting) {
     return (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4 pb-24 md:pb-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-red-600 border-t-transparent mx-auto mb-4"></div>
           <h3 className="text-xl font-bold text-red-600 mb-2">Оформление заказа...</h3>
@@ -115,8 +130,8 @@ export default function OrderForm({ onClose, onSuccess }: OrderFormProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto animate-in zoom-in duration-300">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4 pb-24 md:pb-4 animate-in fade-in duration-300">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[calc(100vh-100px)] md:max-h-[90vh] overflow-y-auto animate-in zoom-in duration-300">
         <div className="sticky top-0 bg-gradient-to-r from-red-600 via-pink-600 to-red-600 text-white p-6 flex items-center justify-between shadow-lg z-10">
           <h2 className="text-2xl font-extrabold">Оформление заказа</h2>
           <button
@@ -194,7 +209,7 @@ export default function OrderForm({ onClose, onSuccess }: OrderFormProps) {
               className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all ${
                 isAuthenticated ? 'bg-gray-100 border-gray-300 cursor-not-allowed' : 'border-gray-300'
               }`}
-              placeholder="+992 XX XXX-XX-XX"
+              placeholder="+992 501 07 77 03"
               disabled={isAuthenticated}
             />
           </div>

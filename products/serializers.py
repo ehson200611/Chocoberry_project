@@ -247,19 +247,53 @@ class UserLoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
     
     def validate(self, attrs):
-        username = attrs.get('username')
-        password = attrs.get('password')
+        username = attrs.get('username', '').strip()
+        password = attrs.get('password', '').strip()
         
-        if username and password:
-            user = authenticate(username=username, password=password)
-            if not user:
-                raise serializers.ValidationError("Неверное имя пользователя или пароль")
-            if not user.is_active:
-                raise serializers.ValidationError("Пользователь неактивен")
-            attrs['user'] = user
-        else:
-            raise serializers.ValidationError("Необходимо указать имя пользователя и пароль")
+        if not username or not password:
+            raise serializers.ValidationError({
+                'non_field_errors': ['Необходимо указать номер телефона и пароль']
+            })
         
+        # Сначала пытаемся найти пользователя по username
+        user = authenticate(username=username, password=password)
+        
+        # Если не нашли, пытаемся найти по номеру телефона через профиль
+        if not user:
+            try:
+                from products.models import UserProfile
+                # Очищаем номер телефона от пробелов и символов
+                phone_clean = username.replace(' ', '').replace('-', '').replace('+', '')
+                # Пробуем найти по точному совпадению
+                profile = UserProfile.objects.get(phone=username)
+                if profile.user:
+                    # Пробуем аутентифицировать по username из профиля
+                    user = authenticate(username=profile.user.username, password=password)
+                else:
+                    # Профиль есть, но пользователь не привязан
+                    raise serializers.ValidationError({
+                        'non_field_errors': ['Профиль найден, но пользователь не привязан. Обратитесь к администратору.']
+                    })
+            except UserProfile.DoesNotExist:
+                # Профиль не найден - это нормально, просто пользователь не существует
+                pass
+            except UserProfile.MultipleObjectsReturned:
+                # Несколько профилей с таким телефоном - ошибка данных
+                raise serializers.ValidationError({
+                    'non_field_errors': ['Найдено несколько профилей с таким номером телефона. Обратитесь к администратору.']
+                })
+        
+        if not user:
+            raise serializers.ValidationError({
+                'non_field_errors': ['Неверный номер телефона или пароль']
+            })
+        
+        if not user.is_active:
+            raise serializers.ValidationError({
+                'non_field_errors': ['Пользователь неактивен. Обратитесь к администратору.']
+            })
+        
+        attrs['user'] = user
         return attrs
 
 

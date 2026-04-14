@@ -80,7 +80,6 @@ apt-get install -y \
     certbot \
     python3-certbot-nginx \
     nodejs \
-    npm \
     git \
     build-essential \
     sqlite3 \
@@ -175,6 +174,10 @@ EOFPROD
 # Выполнение миграций и сбор статики
 python manage.py collectstatic --noinput
 python manage.py migrate --noinput
+
+# Загрузка начальных продуктов и подарочных боксов
+python manage.py load_initial_products
+python manage.py load_gift_boxes
 
 echo "✓ Django настроен"
 ENDSSH
@@ -380,9 +383,6 @@ EOFNginx
 # Активация сайта
 ln -sf /etc/nginx/sites-available/$PROJECT_NAME /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
-
-# Проверка конфигурации
-nginx -t
 
 echo "✓ Nginx настроен"
 ENDSSH

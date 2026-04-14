@@ -13,10 +13,11 @@ export default function ProductCard({ product }: ProductCardProps) {
   const { addToCart } = useCart();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [imageError, setImageError] = useState(false);
-  const [hasValidImage, setHasValidImage] = useState(
+  const [hasValidImage] = useState(
     product.image && !product.image.includes("/images/") && !product.image.startsWith("/images")
   );
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [added, setAdded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getEmoji = (name: string) => {
@@ -26,204 +27,165 @@ export default function ProductCard({ product }: ProductCardProps) {
     if (name.toLowerCase().includes("трайфл")) return "🍮";
     if (name.toLowerCase().includes("банан")) return "🍌";
     if (name.toLowerCase().includes("ананас")) return "🍍";
-    if (name.toLowerCase().includes("микс")) return "🍓🍌";
+    if (name.toLowerCase().includes("микс")) return "🍓";
+    if (name.toLowerCase().includes("шоколад")) return "🍫";
     return "🍫";
   };
 
   const shouldShowImage = product.image && hasValidImage && !imageError;
 
   useEffect(() => {
-    loadUser();
+    authApi.getCurrentUser().then(setCurrentUser).catch(() => {});
   }, []);
-
-  const loadUser = async () => {
-    try {
-      const user = await authApi.getCurrentUser();
-      setCurrentUser(user);
-    } catch (error) {
-      console.error("Error loading user:", error);
-    }
-  };
 
   const isSuperuser = currentUser?.is_superuser || false;
 
+  const handleAddToCart = () => {
+    addToCart(product);
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1500);
+  };
+
   const saveProductName = async (newName: string) => {
-    try {
-      await api.updateProduct(product.id, { name: newName });
-      // Обновляем страницу для перезагрузки продуктов
-      window.location.reload();
-    } catch (error) {
-      console.error("Error saving product name:", error);
-      throw error;
-    }
+    await api.updateProduct(product.id, { name: newName });
+    window.location.reload();
   };
 
   const saveProductDescription = async (newDescription: string) => {
-    try {
-      await api.updateProduct(product.id, { description: newDescription });
-      // Обновляем страницу для перезагрузки продуктов
-      window.location.reload();
-    } catch (error) {
-      console.error("Error saving product description:", error);
-      throw error;
-    }
+    await api.updateProduct(product.id, { description: newDescription });
+    window.location.reload();
   };
 
   const handleImageClick = () => {
-    if (isSuperuser && fileInputRef.current) {
-      fileInputRef.current.click();
-    }
+    if (isSuperuser && fileInputRef.current) fileInputRef.current.click();
   };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // Проверка типа файла
-    if (!file.type.startsWith('image/')) {
-      alert('Пожалуйста, выберите изображение');
-      return;
+    if (!file.type.startsWith("image/")) { alert("Пожалуйста, выберите изображение"); return; }
+    if (file.size > 5 * 1024 * 1024) { alert("Размер не должен превышать 5MB"); return; }
+    setUploadingImage(true);
+    try {
+      await api.updateProduct(product.id, {}, file);
+      window.location.reload();
+    } catch {
+      alert("Ошибка при загрузке изображения");
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
-
-    // Проверка размера файла (макс 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Размер изображения не должен превышать 5MB');
-      return;
-    }
-
-    // Проверка размеров изображения
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    
-    img.onload = async () => {
-      URL.revokeObjectURL(objectUrl);
-      
-      const width = img.width;
-      const height = img.height;
-      const aspectRatio = width / height;
-      
-      // Рекомендуемые размеры: 800x600px (4:3) или 800x450px (16:9)
-      // Минимум: 400x300px, Максимум: 2000x1500px
-      if (width < 400 || height < 300) {
-        alert(`Изображение слишком маленькое. Рекомендуемый размер: минимум 800x600px (сейчас: ${width}x${height}px)`);
-        return;
-      }
-      
-      if (width > 2000 || height > 1500) {
-        alert(`Изображение слишком большое. Рекомендуемый размер: максимум 1200x900px (сейчас: ${width}x${height}px)`);
-        return;
-      }
-      
-      // Проверка соотношения сторон (должно быть близко к 4:3 или 16:9)
-      const idealRatio43 = 4/3;
-      const idealRatio169 = 16/9;
-      const ratioDiff43 = Math.abs(aspectRatio - idealRatio43);
-      const ratioDiff169 = Math.abs(aspectRatio - idealRatio169);
-      
-      if (ratioDiff43 > 0.3 && ratioDiff169 > 0.3) {
-        console.warn(`Соотношение сторон ${width}:${height} (${aspectRatio.toFixed(2)}) не оптимально. Рекомендуется 4:3 (1.33) или 16:9 (1.78)`);
-      }
-      
-      // Продолжаем загрузку
-      setUploadingImage(true);
-      try {
-        await api.updateProduct(product.id, {}, file);
-        window.location.reload();
-      } catch (error) {
-        console.error("Error uploading image:", error);
-        alert('Ошибка при загрузке изображения');
-      } finally {
-        setUploadingImage(false);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      }
-    };
-    
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      alert('Ошибка при чтении изображения');
-    };
-    
-    img.src = objectUrl;
   };
 
   return (
-    <div className="group bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border-2 border-red-100 hover:border-red-300">
-      <div 
-        className={`h-32 sm:h-48 bg-gradient-to-br from-red-200 via-pink-200 to-rose-200 flex items-center justify-center relative overflow-hidden ${
-          isSuperuser ? 'cursor-pointer' : ''
-        }`}
+    <div
+      className="product-card-root group flex flex-col overflow-hidden transition-all duration-300 hover:-translate-y-1"
+      style={{
+        borderRadius: "20px",
+        boxShadow: "0 2px 12px rgba(220,38,38,0.08)",
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 12px 32px rgba(220,38,38,0.18)")}
+      onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "0 2px 12px rgba(220,38,38,0.08)")}
+    >
+      {/* Image area */}
+      <div
+        className="product-card-img-area relative overflow-hidden flex-shrink-0"
+        style={{
+          height: "clamp(120px, 40vw, 200px)",
+          cursor: isSuperuser ? "pointer" : "default",
+        }}
         onClick={handleImageClick}
-        title={isSuperuser ? 'Нажмите, чтобы изменить изображение' : ''}
       >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleImageChange}
-          className="hidden"
-        />
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+
         {uploadingImage && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-20">
-            <div className="text-white font-semibold">Загрузка...</div>
+          <div className="absolute inset-0 z-20 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }}>
+            <div className="text-white font-bold text-sm">Загрузка...</div>
           </div>
         )}
+
         {shouldShowImage ? (
           <>
-            <img 
-              src={product.image} 
+            <img
+              src={product.image}
               alt={product.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
               onError={() => setImageError(true)}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-            {isSuperuser && (
-              <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 rounded text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-                Изменить фото
-              </div>
-            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
           </>
         ) : (
-          <>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent"></div>
-            <div className="text-4xl sm:text-7xl z-10 transform group-hover:scale-110 transition-transform duration-300">
+          <div className="w-full h-full flex items-center justify-center">
+            <span
+              className="text-5xl sm:text-6xl transition-transform duration-300 group-hover:scale-110 select-none"
+              style={{ filter: "drop-shadow(0 4px 8px rgba(220,38,38,0.3))" }}
+            >
               {getEmoji(product.name)}
-            </div>
-            {isSuperuser && (
-              <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 rounded text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-                Добавить фото
-              </div>
-            )}
-          </>
+            </span>
+          </div>
         )}
+
+        {/* Superuser badge */}
+        {isSuperuser && (
+          <div
+            className="absolute top-2 right-2 px-2 py-1 rounded-lg text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity shadow"
+            style={{ background: "#dc2626", color: "#fff" }}
+          >
+            {shouldShowImage ? "✏️ Фото" : "📷 Добавить"}
+          </div>
+        )}
+
+        {/* Price badge */}
+        <div
+          className="absolute bottom-2 left-2 px-2.5 py-1 rounded-xl font-black text-sm shadow-lg"
+          style={{ background: "linear-gradient(135deg,#dc2626,#db2777)", color: "#fff" }}
+        >
+          {product.price} с
+        </div>
       </div>
-      <div className="p-3 sm:p-5">
+
+      {/* Content */}
+      <div className="flex flex-col flex-1 p-3 sm:p-4 gap-2">
         <EditableText
           value={product.name}
           onSave={saveProductName}
           tag="h3"
-          className="text-sm sm:text-lg font-bold text-red-900 mb-1 sm:mb-2 line-clamp-2 min-h-[2.5rem] sm:min-h-[3rem]"
+          className="font-black text-sm sm:text-base line-clamp-2 leading-tight text-gray-800"
           isSuperuser={isSuperuser}
         />
         <EditableText
           value={product.description}
           onSave={saveProductDescription}
           tag="p"
-          className="text-red-700 text-xs sm:text-sm mb-2 sm:mb-4 min-h-[2.5rem] sm:min-h-[2.5rem] line-clamp-2"
+          className="text-xs sm:text-sm line-clamp-2 flex-1 text-gray-500"
           isSuperuser={isSuperuser}
         />
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
-          <span className="text-lg sm:text-2xl font-bold text-red-600">
-            {product.price} сомони
-          </span>
-          <button
-            onClick={() => addToCart(product)}
-            className="w-full sm:w-auto bg-gradient-to-r from-red-600 to-pink-600 text-white px-4 sm:px-6 py-2 rounded-full text-xs sm:text-base font-semibold hover:from-red-700 hover:to-pink-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
-          >
-            В корзину
-          </button>
-        </div>
+
+        {/* Add to cart button */}
+        <button
+          onClick={handleAddToCart}
+          className="w-full py-2.5 rounded-xl font-black text-sm transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 mt-1"
+          style={{
+            background: added
+              ? "linear-gradient(135deg,#16a34a,#15803d)"
+              : "linear-gradient(135deg,#dc2626,#db2777)",
+            color: "#fff",
+            boxShadow: added
+              ? "0 4px 16px rgba(22,163,74,0.35)"
+              : "0 4px 16px rgba(220,38,38,0.35)",
+          }}
+        >
+          {added ? (
+            <>✅ Добавлено</>
+          ) : (
+            <>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              В корзину
+            </>
+          )}
+        </button>
       </div>
     </div>
   );

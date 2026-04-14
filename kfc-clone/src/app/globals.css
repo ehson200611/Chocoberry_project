@@ -1,5 +1,111 @@
 @import "tailwindcss";
 
+/* =====================================================
+   Tailwind v4 color override with HEX values
+   for maximum browser compatibility (no oklch)
+   ===================================================== */
+@theme {
+  /* Red */
+  --color-red-50: #fef2f2;
+  --color-red-100: #fee2e2;
+  --color-red-200: #fecaca;
+  --color-red-300: #fca5a5;
+  --color-red-400: #f87171;
+  --color-red-500: #ef4444;
+  --color-red-600: #dc2626;
+  --color-red-700: #b91c1c;
+  --color-red-800: #991b1b;
+  --color-red-900: #7f1d1d;
+  --color-red-950: #450a0a;
+
+  /* Pink */
+  --color-pink-50: #fdf2f8;
+  --color-pink-100: #fce7f3;
+  --color-pink-200: #fbcfe8;
+  --color-pink-300: #f9a8d4;
+  --color-pink-400: #f472b6;
+  --color-pink-500: #ec4899;
+  --color-pink-600: #db2777;
+  --color-pink-700: #be185d;
+  --color-pink-800: #9d174d;
+  --color-pink-900: #831843;
+  --color-pink-950: #500724;
+
+  /* Rose */
+  --color-rose-50: #fff1f2;
+  --color-rose-100: #ffe4e6;
+  --color-rose-200: #fecdd3;
+  --color-rose-300: #fda4af;
+  --color-rose-400: #fb7185;
+  --color-rose-500: #f43f5e;
+  --color-rose-600: #e11d48;
+  --color-rose-700: #be123c;
+  --color-rose-800: #9f1239;
+  --color-rose-900: #881337;
+
+  /* Gray */
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+  --color-gray-950: #030712;
+
+  /* White / Black */
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* Green */
+  --color-green-50: #f0fdf4;
+  --color-green-100: #dcfce7;
+  --color-green-200: #bbf7d0;
+  --color-green-300: #86efac;
+  --color-green-400: #4ade80;
+  --color-green-500: #22c55e;
+  --color-green-600: #16a34a;
+  --color-green-700: #15803d;
+  --color-green-800: #166534;
+  --color-green-900: #14532d;
+
+  /* Emerald */
+  --color-emerald-50: #ecfdf5;
+  --color-emerald-100: #d1fae5;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+
+  /* Slate */
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+
+  /* Orange */
+  --color-orange-400: #fb923c;
+  --color-orange-500: #f97316;
+  --color-orange-600: #ea580c;
+
+  /* Yellow */
+  --color-yellow-400: #facc15;
+  --color-yellow-500: #eab308;
+
+  /* Blue */
+  --color-blue-400: #60a5fa;
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -25,4 +131,136 @@ body {
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;
+}
+
+/* =====================================================
+   DARK MODE
+   ===================================================== */
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark body {
+  background: #0d0d0d !important;
+  color: #f0f0f0 !important;
+}
+
+/* Page background gradients */
+html.dark .min-h-screen {
+  background: linear-gradient(160deg, #1a0505 0%, #1a050f 50%, #1a0505 100%) !important;
+}
+
+/* White cards → dark */
+html.dark .bg-white {
+  background-color: #1e1a1a !important;
+  color: #f0f0f0 !important;
+}
+html.dark .bg-white\/70,
+html.dark .bg-white\/80,
+html.dark .bg-white\/90 {
+  background-color: rgba(30, 26, 26, 0.95) !important;
+}
+
+/* Light pink/rose/red backgrounds → dark */
+html.dark .bg-red-50   { background-color: #1f0a0a !important; }
+html.dark .bg-rose-50  { background-color: #1f0a10 !important; }
+html.dark .bg-pink-50  { background-color: #1f0a15 !important; }
+html.dark .bg-red-100  { background-color: #2a1010 !important; }
+html.dark .bg-pink-100 { background-color: #2a101a !important; }
+
+/* Gradient backgrounds */
+html.dark [class*="from-red-50"]  { --tw-gradient-from: #1f0a0a !important; }
+html.dark [class*="from-red-100"] { --tw-gradient-from: #2a1010 !important; }
+html.dark [class*="to-pink-50"]   { --tw-gradient-to: #1f0a15 !important; }
+html.dark [class*="via-rose-50"]  { --tw-gradient-via: #1f0a10 !important; }
+html.dark [class*="from-white"]   { --tw-gradient-from: #1e1a1a !important; }
+html.dark [class*="to-red-50"]    { --tw-gradient-to: #1f0a0a !important; }
+html.dark [class*="from-pink-100"]{ --tw-gradient-from: #2a101a !important; }
+html.dark [class*="to-rose-100"]  { --tw-gradient-to: #2a1015 !important; }
+html.dark [class*="via-pink-100"] { --tw-gradient-via: #2a101a !important; }
+html.dark [class*="from-red-600"] { --tw-gradient-from: #7f1d1d !important; }
+html.dark [class*="via-pink-600"] { --tw-gradient-via: #500724 !important; }
+html.dark [class*="to-red-600"]   { --tw-gradient-to: #7f1d1d !important; }
+
+/* Text colors in dark mode */
+html.dark .text-gray-500 { color: #9ca3af !important; }
+html.dark .text-gray-600 { color: #b0b8c8 !important; }
+html.dark .text-gray-700 { color: #d1d5db !important; }
+html.dark .text-gray-800 { color: #e5e7eb !important; }
+html.dark .text-gray-900 { color: #f3f4f6 !important; }
+html.dark .text-red-900  { color: #ffffff !important; }
+
+/* Red texts → white in dark mode */
+html.dark .text-red-50  { color: #ffffff !important; }
+html.dark .text-red-100 { color: #ffffff !important; }
+html.dark .text-red-200 { color: #ffffff !important; }
+html.dark .text-red-300 { color: #ffffff !important; }
+html.dark .text-red-400 { color: #ffffff !important; }
+html.dark .text-red-500 { color: #ffffff !important; }
+html.dark .text-red-600 { color: #ffffff !important; }
+html.dark .text-red-700 { color: #ffffff !important; }
+html.dark .text-red-800 { color: #ffffff !important; }
+
+/* Pink/Rose texts → white in dark mode */
+html.dark .text-pink-50  { color: #ffffff !important; }
+html.dark .text-pink-100 { color: #ffffff !important; }
+html.dark .text-pink-400 { color: #ffffff !important; }
+html.dark .text-pink-500 { color: #ffffff !important; }
+html.dark .text-pink-600 { color: #ffffff !important; }
+html.dark .text-pink-700 { color: #ffffff !important; }
+html.dark .text-pink-800 { color: #ffffff !important; }
+html.dark .text-rose-600 { color: #ffffff !important; }
+html.dark .text-rose-700 { color: #ffffff !important; }
+
+/* Borders */
+html.dark .border-red-100  { border-color: #3d1515 !important; }
+html.dark .border-red-200  { border-color: #5a1f1f !important; }
+html.dark .border-gray-100 { border-color: #2d2d2d !important; }
+html.dark .border-gray-200 { border-color: #374151 !important; }
+
+/* Input fields */
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background-color: #2a1e1e !important;
+  color: #f0f0f0 !important;
+  border-color: #4a2a2a !important;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #6b7280 !important;
+}
+
+/* Shadow cards */
+html.dark .shadow-md,
+html.dark .shadow-lg,
+html.dark .shadow-xl {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Dividers */
+html.dark .divide-y > * + * {
+  border-color: #2a2020 !important;
+}
+
+/* ── Product Card ── */
+.product-card-root {
+  background: #fff;
+  border: 1px solid #fee2e2;
+}
+html.dark .product-card-root {
+  background: #1e1414 !important;
+  border-color: #3d1a1a !important;
+  color: #f0f0f0 !important;
+}
+.product-card-img-area {
+  background: linear-gradient(135deg,#fde8f0,#fce7f3,#fdf2f8);
+}
+html.dark .product-card-img-area {
+  background: linear-gradient(135deg,#2d1020,#3d1a2a,#2d1020) !important;
+}
+
+/* Dark mode transition */
+*, *::before, *::after {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.2s ease;
 }

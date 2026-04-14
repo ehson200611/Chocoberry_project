@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 export interface Product {
   id: number;
@@ -28,9 +28,40 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+const CART_STORAGE_KEY = 'chocoberry_cart';
+
+// Функция для загрузки корзины из localStorage
+function loadCartFromStorage(): CartItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const stored = localStorage.getItem(CART_STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (error) {
+    console.error('Error loading cart from localStorage:', error);
+  }
+  return [];
+}
+
+// Функция для сохранения корзины в localStorage
+function saveCartToStorage(cart: CartItem[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+  } catch (error) {
+    console.error('Error saving cart to localStorage:', error);
+  }
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => loadCartFromStorage());
   const [isOpen, setIsOpen] = useState(false);
+
+  // Сохраняем корзину в localStorage при каждом изменении
+  useEffect(() => {
+    saveCartToStorage(cart);
+  }, [cart]);
 
   const addToCart = (product: Product) => {
     setCart((prevCart) => {

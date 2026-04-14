@@ -3,6 +3,20 @@
 import { useState, useEffect, useRef } from "react";
 import { profileApi, authApi, UserProfile } from "../services/api";
 
+const getApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    return '/api';
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+};
+const API_BASE_URL = getApiBaseUrl();
+
+function getCsrfToken(): string {
+  if (typeof document === 'undefined') return '';
+  const match = document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='));
+  return match ? decodeURIComponent(match.trim().split('=')[1]) : '';
+}
+
 interface ProfileProps {
   phone: string;
   onClose: () => void;
@@ -12,47 +26,33 @@ export default function Profile({ phone, onClose }: ProfileProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    address: "",
-  });
+  const [formData, setFormData] = useState({ name: "", address: "" });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    loadProfile();
-  }, [phone]);
+  useEffect(() => { loadProfile(); }, [phone]); // eslint-disable-line
 
   const loadProfile = async () => {
     setLoading(true);
     try {
-      // Сначала пытаемся загрузить через авторизованного пользователя
       const user = await authApi.getCurrentUser();
-      if (user && user.profile) {
+      if (user?.profile) {
         setProfile(user.profile);
-        setFormData({
-          name: user.profile.name || "",
-          address: user.profile.address || "",
-        });
+        setFormData({ name: user.profile.name || "", address: user.profile.address || "" });
         setPhotoPreview(user.profile.photo_url || null);
         setLoading(false);
         return;
       }
-      
-      // Если не авторизован, загружаем по телефону
       if (phone) {
         const data = await profileApi.getProfileByPhone(phone);
         if (data) {
           setProfile(data);
-          setFormData({
-            name: data.name,
-            address: data.address,
-          });
-          if (data.photo_url) {
-            setPhotoPreview(data.photo_url);
-          }
+          setFormData({ name: data.name || "", address: data.address || "" });
+          if (data.photo_url) setPhotoPreview(data.photo_url);
         }
       }
     } catch (error) {
@@ -64,136 +64,89 @@ export default function Profile({ phone, onClose }: ProfileProps) {
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Проверяем тип файла
-      if (!file.type.startsWith('image/')) {
-        alert('Пожалуйста, выберите изображение');
-        e.target.value = ''; // Очищаем input
-        return;
-      }
-      
-      // Проверяем размер файла (макс 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Размер изображения не должен превышать 5MB');
-        e.target.value = ''; // Очищаем input
-        return;
-      }
-      
-      // Проверяем, что файл не пустой
-      if (file.size === 0) {
-        alert('Файл пустой');
-        e.target.value = ''; // Очищаем input
-        return;
-      }
-      
-      console.log("Выбран файл:", {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        lastModified: file.lastModified
-      });
-      
-      // Сохраняем оригинальный файл
-      setPhotoFile(file);
-      
-      // Создаем предпросмотр
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string);
-      };
-      reader.onerror = () => {
-        alert('Ошибка при чтении файла');
-        setPhotoFile(null);
-        setPhotoPreview(null);
-      };
-      reader.readAsDataURL(file);
+    setPhotoError(null);
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setPhotoError('Пожалуйста, выберите изображение (JPG, PNG, GIF)');
+      return;
     }
+    if (file.size > 5 * 1024 * 1024) {
+      setPhotoError('Размер файла не должен превышать 5MB');
+      return;
+    }
+    setPhotoFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setPhotoPreview(reader.result as string);
+    reader.readAsDataURL(file);
   };
 
   const handleSave = async () => {
     if (!profile) return;
-    
     setSaving(true);
+    setPhotoError(null);
     try {
-      const formDataToSend = new FormData();
-      formDataToSend.append("name", formData.name);
-      formDataToSend.append("address", formData.address);
-      
-      // Добавляем фото только если файл действительно выбран и валиден
-      if (photoFile && photoFile instanceof File) {
-        // Проверяем еще раз перед отправкой
-        if (photoFile.type.startsWith('image/') && photoFile.size > 0) {
-          console.log("Отправка фото:", {
-            name: photoFile.name,
-            type: photoFile.type,
-            size: photoFile.size
-          });
-          // Используем оригинальный файл из input, если доступен
-          formDataToSend.append("photo", photoFile, photoFile.name);
-        } else {
-          console.warn("Файл не прошел валидацию:", photoFile);
-        }
+      // Проверяем авторизацию
+      const user = await authApi.getCurrentUser();
+      if (!user) {
+        throw new Error('Необходимо войти в систему для обновления профиля');
       }
 
-      console.log("FormData entries:", Array.from(formDataToSend.entries()).map(([k, v]) => [k, v instanceof File ? `File: ${v.name} (${v.size} bytes)` : v]));
-
-      const response = await fetch(
-        `http://localhost:8000/api/profiles/${profile.id}/`,
-        {
-          method: "PATCH",
-          body: formDataToSend,
-          // Не устанавливаем Content-Type, браузер сделает это автоматически с boundary
-        }
-      );
-
+      const fd = new FormData();
+      fd.append("name", formData.name);
+      fd.append("address", formData.address);
+      if (photoFile instanceof File && photoFile.type.startsWith('image/') && photoFile.size > 0) {
+        fd.append("photo", photoFile, photoFile.name);
+      }
+      const csrf = getCsrfToken();
+      const apiUrl = typeof window !== 'undefined' ? '/api' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api');
+      const response = await fetch(`${apiUrl}/profiles/${profile.id}/`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: csrf ? { 'X-CSRFToken': csrf } : {},
+        body: fd,
+      });
       if (!response.ok) {
-        let errorMessage = "Ошибка при сохранении профиля";
+        const errorText = await response.text().catch(() => '');
+        let err;
         try {
-          const errorData = await response.json();
-          console.error("Error response:", errorData);
-          
-          // Обрабатываем разные типы ошибок
-          if (errorData.photo) {
-            errorMessage = `Ошибка загрузки фото: ${Array.isArray(errorData.photo) ? errorData.photo[0] : errorData.photo}`;
-          } else if (errorData.detail) {
-            errorMessage = errorData.detail;
-          } else if (errorData.error) {
-            errorMessage = errorData.error;
-          } else if (typeof errorData === 'object') {
-            // Показываем первую ошибку из объекта
-            const firstError = Object.values(errorData)[0];
-            if (Array.isArray(firstError)) {
-              errorMessage = firstError[0];
-            } else if (typeof firstError === 'string') {
-              errorMessage = firstError;
-            }
-          }
-        } catch (e) {
-          // Если не удалось распарсить JSON, используем текст ответа
-          const text = await response.text().catch(() => '');
-          console.error("Response text:", text);
+          err = JSON.parse(errorText);
+        } catch {
+          err = { error: errorText || `Ошибка ${response.status}` };
         }
-        throw new Error(errorMessage);
+        throw new Error(err.photo?.[0] || err.detail || err.error || `Ошибка ${response.status}: ${response.statusText}`);
       }
-
-      const result = await response.json();
       await loadProfile();
       setEditing(false);
       setPhotoFile(null);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+      window.dispatchEvent(new CustomEvent('profileUpdated'));
     } catch (error) {
-      console.error("Error saving profile:", error);
-      const errorMessage = error instanceof Error ? error.message : "Ошибка при сохранении профиля";
-      alert(errorMessage);
+      const msg = error instanceof Error ? error.message : "Ошибка при сохранении";
+      console.error('Profile save error:', error);
+      alert(msg);
     } finally {
       setSaving(false);
     }
   };
 
+  const cancelEditing = () => {
+    setEditing(false);
+    setPhotoFile(null);
+    setPhotoError(null);
+    setPhotoPreview(profile?.photo_url || null);
+    setFormData({ name: profile?.name || "", address: profile?.address || "" });
+  };
+
+  const getInitials = (name: string) =>
+    name.split(" ").filter(Boolean).map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?";
+
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg p-8">
-          <div className="text-4xl animate-spin">🍓</div>
+      <div className="fixed inset-0 z-[90] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)" }}>
+        <div className="rounded-3xl p-10 flex flex-col items-center gap-4" style={{ background: "#1e1414" }}>
+          <div className="w-14 h-14 rounded-full border-4 border-red-700 border-t-pink-400 animate-spin" />
+          <p className="text-white font-semibold">Загрузка...</p>
         </div>
       </div>
     );
@@ -201,179 +154,248 @@ export default function Profile({ phone, onClose }: ProfileProps) {
 
   if (!profile) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg max-w-md w-full p-6">
-          <p className="text-center text-gray-600">Профиль не найден</p>
-          <button
-            onClick={onClose}
-            className="mt-4 w-full bg-red-600 text-white py-2 rounded-lg"
-          >
-            Закрыть
-          </button>
+      <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)" }}>
+        <div className="rounded-3xl p-8 text-center max-w-xs w-full" style={{ background: "#1e1414" }}>
+          <p className="text-white mb-4">Профиль не найден</p>
+          <button onClick={onClose} className="w-full py-3 rounded-xl text-white font-bold" style={{ background: "linear-gradient(135deg,#dc2626,#db2777)" }}>Закрыть</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-red-600 to-pink-600 text-white p-6 rounded-t-2xl">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold">👤 Мой профиль</h2>
-            <button
-              onClick={onClose}
-              className="text-white hover:text-red-200 transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-        </div>
+    <>
+      <style>{`
+        .prof-modal { background: #ffffff; }
+        html.dark .prof-modal { background: #160c0c !important; }
+        .prof-field { background: #fef2f2; border-color: #fecaca; }
+        html.dark .prof-field { background: #2a1010 !important; border-color: #5a1f1f !important; }
+        .prof-label { color: #b91c1c; }
+        html.dark .prof-label { color: #f87171 !important; }
+        .prof-value { color: #1f2937; }
+        html.dark .prof-value { color: #f3f4f6 !important; }
+        .prof-input { background: #fff; border-color: #fca5a5; color: #1f2937; }
+        html.dark .prof-input { background: #2a1a1a !important; border-color: #7f2020 !important; color: #f3f4f6 !important; }
+        .prof-cancel { background: #f3f4f6; color: #374151; }
+        html.dark .prof-cancel { background: #2a2020 !important; color: #d1d5db !important; }
+        .prof-photo-zone { background: #fef2f2; border: 2px dashed #fca5a5; }
+        html.dark .prof-photo-zone { background: #2a1010 !important; border-color: #7f2020 !important; }
+        .prof-date-text { color: #6b7280; }
+        html.dark .prof-date-text { color: #9ca3af !important; }
+      `}</style>
 
-        <div className="p-6">
-          {/* Photo Section */}
-          <div className="flex flex-col items-center mb-6">
-            <div className="relative">
-              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-red-200 to-pink-200 flex items-center justify-center overflow-hidden border-4 border-red-300 shadow-lg">
-                {photoPreview ? (
-                  <img
-                    src={photoPreview}
-                    alt={profile.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-6xl">👤</span>
-                )}
-              </div>
+      <div
+        className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4"
+        style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)" }}
+        onClick={(e) => e.target === e.currentTarget && !editing && onClose()}
+      >
+        <div className="prof-modal w-full sm:max-w-lg sm:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col"
+          style={{ maxHeight: "95vh" }}>
+
+          {/* ─── TOP BAR ─── */}
+          <div
+            className="flex-shrink-0 flex items-center justify-between px-5 py-4 rounded-t-3xl"
+            style={{ background: "linear-gradient(135deg,#9b0000 0%,#dc2626 50%,#db2777 100%)" }}
+          >
+            <div className="flex items-center gap-3">
               {editing && (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 bg-red-600 text-white rounded-full p-2 hover:bg-red-700 transition-colors shadow-lg"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
+                <button onClick={cancelEditing} className="text-white/80 hover:text-white transition-colors">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
               )}
+              <div>
+                <h2 className="text-xl font-black text-white">
+                  {editing ? "Редактирование" : "Мой профиль"}
+                </h2>
+                <p className="text-white/60 text-xs">
+                  {editing ? "Измените данные и нажмите Сохранить" : "Управление аккаунтом"}
+                </p>
+              </div>
+            </div>
+            {!editing && (
+              <button
+                onClick={onClose}
+                className="flex items-center justify-center w-9 h-9 rounded-full"
+                style={{ background: "rgba(255,255,255,0.2)" }}
+              >
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* ─── SCROLLABLE CONTENT ─── */}
+          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
+
+            {/* Success banner */}
+            {saveSuccess && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-2xl text-white font-semibold text-sm"
+                style={{ background: "linear-gradient(135deg,#16a34a,#15803d)" }}>
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+                Профиль успешно сохранён! ✅
+              </div>
+            )}
+
+            {/* ══ PHOTO SECTION ══ */}
+            <div className="prof-field rounded-2xl p-4 border">
+              <p className="prof-label text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Фото профиля
+              </p>
+
+              <div className="flex items-center gap-4">
+                {/* Current / Preview photo */}
+                <div
+                  className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 flex items-center justify-center shadow-md"
+                  style={{ background: "linear-gradient(135deg,#fecaca,#fbcfe8)", border: "3px solid #fca5a5" }}
+                >
+                  {photoPreview ? (
+                    <img src={photoPreview} alt="photo" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-3xl font-black" style={{ color: "#dc2626" }}>
+                      {getInitials(profile.name || profile.phone)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Upload area */}
+                <div className="flex-1">
+                  {editing ? (
+                    <>
+                      {/* Big obvious button */}
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-white transition-all active:scale-95 shadow-lg mb-2"
+                        style={{ background: "linear-gradient(135deg,#dc2626,#db2777)", boxShadow: "0 4px 14px rgba(220,38,38,0.4)" }}
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        📷 Выбрать фото
+                      </button>
+                      <p className="prof-date-text text-xs text-center">
+                        JPG, PNG, GIF — до 5 MB
+                      </p>
+                      {photoFile && (
+                        <p className="text-green-600 text-xs font-semibold text-center mt-1">
+                          ✅ Выбрано: {photoFile.name}
+                        </p>
+                      )}
+                      {photoError && (
+                        <p className="text-red-500 text-xs font-semibold text-center mt-1">⚠️ {photoError}</p>
+                      )}
+                    </>
+                  ) : (
+                    <div>
+                      <p className="prof-value font-semibold text-sm mb-1">
+                        {photoPreview ? "Фото установлено ✅" : "Фото не установлено"}
+                      </p>
+                      <p className="prof-date-text text-xs">
+                        Нажмите «Редактировать» чтобы изменить фото
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/gif,image/webp"
                 onChange={handlePhotoChange}
                 className="hidden"
               />
             </div>
-          </div>
 
-          {/* Profile Info */}
-          <div className="space-y-4">
-            <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-lg p-4 border border-red-200">
-              <label className="block text-sm font-medium text-red-700 mb-1">
+            {/* ══ NAME ══ */}
+            <div className="prof-field rounded-2xl p-4 border">
+              <p className="prof-label text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
                 Имя
-              </label>
+              </p>
               {editing ? (
                 <input
                   type="text"
                   value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  className="w-full px-4 py-2 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  className="prof-input w-full px-4 py-2.5 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 text-base font-semibold"
+                  placeholder="Введите ваше имя"
                 />
               ) : (
-                <p className="text-lg font-semibold text-red-900">
-                  {profile.name}
+                <p className="prof-value text-lg font-bold">
+                  {profile.name || <span style={{ opacity: 0.4 }}>Не заполнено</span>}
                 </p>
               )}
             </div>
 
-            <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-lg p-4 border border-red-200">
-              <label className="block text-sm font-medium text-red-700 mb-1">
+            {/* ══ PHONE (read-only) ══ */}
+            <div className="prof-field rounded-2xl p-4 border">
+              <p className="prof-label text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
                 Телефон
-              </label>
-              <p className="text-lg font-semibold text-red-900">
-                {profile.phone}
               </p>
+              <p className="prof-value text-lg font-bold">{profile.phone}</p>
+              <p className="prof-date-text text-xs mt-0.5">🔒 Телефон нельзя изменить</p>
             </div>
 
-            <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-lg p-4 border border-red-200">
-              <label className="block text-sm font-medium text-red-700 mb-1">
+            {/* ══ ADDRESS ══ */}
+            <div className="prof-field rounded-2xl p-4 border">
+              <p className="prof-label text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
                 Адрес доставки
-              </label>
+              </p>
               {editing ? (
                 <textarea
                   value={formData.address}
-                  onChange={(e) =>
-                    setFormData({ ...formData, address: e.target.value })
-                  }
+                  onChange={e => setFormData({ ...formData, address: e.target.value })}
                   rows={3}
-                  className="w-full px-4 py-2 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="prof-input w-full px-4 py-2.5 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 text-base font-semibold resize-none"
+                  placeholder="ул. Пример, д. 1, кв. 1"
                 />
               ) : (
-                <p className="text-lg font-semibold text-red-900">
-                  {profile.address}
+                <p className="prof-value text-lg font-bold">
+                  {profile.address || <span style={{ opacity: 0.4 }}>Не заполнено</span>}
                 </p>
               )}
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-sm text-gray-600">
-                <strong>Дата регистрации:</strong>{" "}
-                {new Date(profile.created_at).toLocaleDateString("ru-RU")}
-              </p>
+            {/* ══ REGISTERED DATE ══ */}
+            <div className="prof-field rounded-2xl p-3.5 border flex items-center gap-3">
+              <span className="text-2xl">📅</span>
+              <div>
+                <p className="prof-label text-xs font-bold uppercase tracking-wider">С нами с</p>
+                <p className="prof-value font-bold text-sm mt-0.5">
+                  {new Date(profile.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "long", year: "numeric" })}
+                </p>
+              </div>
             </div>
+
+            <div className="h-1" />
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-3 mt-6">
+          {/* ─── BOTTOM ACTIONS ─── */}
+          <div className="flex-shrink-0 px-5 pb-6 pt-3 flex gap-3 border-t" style={{ borderColor: "rgba(0,0,0,0.07)" }}>
             {editing ? (
               <>
                 <button
-                  onClick={() => {
-                    setEditing(false);
-                    setFormData({
-                      name: profile.name,
-                      address: profile.address,
-                    });
-                    setPhotoFile(null);
-                    if (profile.photo_url) {
-                      setPhotoPreview(profile.photo_url);
-                    } else {
-                      setPhotoPreview(null);
-                    }
-                  }}
-                  className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  onClick={cancelEditing}
+                  className="prof-cancel flex-1 py-3.5 rounded-2xl font-bold text-base transition-all active:scale-95"
                   disabled={saving}
                 >
                   Отмена
@@ -381,23 +403,43 @@ export default function Profile({ phone, onClose }: ProfileProps) {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="flex-1 bg-gradient-to-r from-red-600 to-pink-600 text-white py-3 rounded-lg font-bold hover:from-red-700 hover:to-pink-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                  className="flex-[2] py-3.5 rounded-2xl font-black text-white text-base transition-all active:scale-95 shadow-xl flex items-center justify-center gap-2 disabled:opacity-60"
+                  style={{ background: "linear-gradient(135deg,#dc2626,#db2777)" }}
                 >
-                  {saving ? "Сохранение..." : "Сохранить"}
+                  {saving ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Сохранение...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                      💾 Сохранить
+                    </>
+                  )}
                 </button>
               </>
             ) : (
               <button
                 onClick={() => setEditing(true)}
-                className="w-full bg-gradient-to-r from-red-600 to-pink-600 text-white py-3 rounded-lg font-bold hover:from-red-700 hover:to-pink-700 transition-all shadow-md hover:shadow-lg"
+                className="w-full py-3.5 rounded-2xl font-black text-white text-base transition-all active:scale-95 shadow-xl flex items-center justify-center gap-2"
+                style={{
+                  background: "linear-gradient(135deg,#dc2626 0%,#db2777 100%)",
+                  boxShadow: "0 8px 24px rgba(220,38,38,0.4)",
+                }}
               >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
                 ✏️ Редактировать профиль
               </button>
             )}
           </div>
+
         </div>
       </div>
-    </div>
+    </>
   );
 }
-

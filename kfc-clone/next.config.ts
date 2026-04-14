@@ -15,6 +15,26 @@ const nextConfig: NextConfig = {
         port: '8000',
         pathname: '/media/**',
       },
+      {
+        protocol: 'http',
+        hostname: '37.252.17.34',
+        pathname: '/media/**',
+      },
+      {
+        protocol: 'http',
+        hostname: '212.193.24.67',
+        pathname: '/media/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'chocoberry.tj',
+        pathname: '/media/**',
+      },
+      {
+        protocol: 'http',
+        hostname: 'chocoberry.tj',
+        pathname: '/media/**',
+      },
     ],
   },
 };

@@ -80,6 +80,23 @@ class NewItem(models.Model):
         return self.title
 
 
+class ChatMessage(models.Model):
+    SENDER_CHOICES = [('client', 'Клиент'), ('admin', 'Администратор')]
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_messages', verbose_name="Пользователь")
+    message = models.TextField(verbose_name="Сообщение")
+    sender = models.CharField(max_length=10, choices=SENDER_CHOICES, verbose_name="Отправитель")
+    is_read = models.BooleanField(default=False, verbose_name="Прочитано")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = "Сообщение чата"
+        verbose_name_plural = "Сообщения чата"
+
+    def __str__(self):
+        return f"{self.get_sender_display()} → {self.user.username}: {self.message[:40]}"
+
+
 class EditableContent(models.Model):
     """Модель для редактируемого контента на сайте"""
     key = models.CharField(max_length=200, unique=True, verbose_name="Ключ")

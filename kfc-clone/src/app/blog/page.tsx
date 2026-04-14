@@ -61,44 +61,58 @@ export default function Blog() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-red-50 via-rose-50 to-pink-50">
+    <div className="min-h-screen flex flex-col" style={{ background: "var(--page-bg,#fff1f2)" }}>
+      <style>{`
+        :root { --page-bg: #fff1f2; }
+        html.dark { --page-bg: #0d0505; }
+        .page-card { background: #ffffff; }
+        html.dark .page-card { background: #1e1414 !important; color: #f3f4f6 !important; }
+        .page-card-light { background: linear-gradient(135deg,#fee2e2,#fce7f3); }
+        html.dark .page-card-light { background: #2a1010 !important; }
+        .page-text-body { color: #4b5563; }
+        html.dark .page-text-body { color: #d1d5db !important; }
+        .page-text-meta { color: #6b7280; }
+        html.dark .page-text-meta { color: #9ca3af !important; }
+        .blog-post-border { border-color: transparent; }
+        html.dark .blog-post-border { border-color: #3d1515 !important; }
+        .blog-divider { border-color: #e5e7eb; }
+        html.dark .blog-divider { border-color: #2a2020 !important; }
+      `}</style>
       <Header />
-      <main className="flex-1 container mx-auto px-4 pt-12 pb-28 sm:pb-16">
-        <div className="max-w-6xl mx-auto">
-          {/* Заголовок */}
-          <div className="text-center mb-16 relative">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-64 h-64 bg-gradient-to-r from-red-200/30 to-pink-200/30 rounded-full blur-3xl"></div>
-            </div>
-            <div className="relative z-10">
-              <EditableText
-                value="Наш блог"
-                contentKey="blog_title"
-                page="blog"
-                tag="h1"
-                className="text-5xl sm:text-6xl md:text-7xl font-extrabold bg-gradient-to-r from-red-600 via-pink-600 to-red-600 bg-clip-text text-transparent mb-6 inline-block"
-                isSuperuser={isSuperuser}
-              />
-              <EditableText
-                value="Новости, рецепты и интересные истории"
-                contentKey="blog_subtitle"
-                page="blog"
-                tag="p"
-                className="text-xl sm:text-2xl text-red-700 font-semibold"
-                isSuperuser={isSuperuser}
-              />
-            </div>
+
+      {/* Hero Banner */}
+      <div
+        className="relative overflow-hidden"
+        style={{ background: "linear-gradient(135deg,#9b0000 0%,#dc2626 45%,#db2777 100%)" }}
+      >
+        <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }} />
+        <div className="absolute -bottom-12 -left-12 w-44 h-44 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }} />
+        <div className="relative container mx-auto px-4 py-8 flex items-center gap-4">
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-xl flex-shrink-0"
+            style={{ background: "rgba(255,255,255,0.2)", backdropFilter: "blur(8px)" }}
+          >
+            📖
           </div>
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-black text-white drop-shadow-lg">Наш блог</h1>
+            <p className="text-white/70 text-sm mt-0.5">Новости, рецепты и интересные истории</p>
+          </div>
+        </div>
+      </div>
+
+      <main className="flex-1 container mx-auto px-4 pt-8 pb-28 sm:pb-16">
+        <div className="max-w-6xl mx-auto">
 
           {/* Посты блога */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
             {blogPosts.map((post, index) => (
               <article
                 key={post.id}
-                className="group bg-white rounded-3xl shadow-2xl overflow-hidden hover:shadow-red-200/50 transition-all duration-500 transform hover:-translate-y-2 border-2 border-transparent hover:border-red-200"
+                className="page-card blog-post-border group rounded-3xl shadow-2xl overflow-hidden transition-all duration-500 transform hover:-translate-y-2 border-2"
                 style={{ animationDelay: `${index * 100}ms` }}
               >
-                <div className="relative bg-gradient-to-br from-red-100 via-pink-100 to-rose-100 p-6 text-center overflow-hidden">
+                <div className="page-card-light relative p-6 text-center overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-br from-red-200/20 to-pink-200/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                   <div className="relative z-10">
                     <EditableImage
@@ -133,16 +147,16 @@ export default function Blog() {
                     contentKey={`blog_post_${post.id}_excerpt`}
                     page="blog"
                     tag="p"
-                    className="text-gray-600 mb-6 text-lg leading-relaxed"
+                    className="page-text-body mb-6 text-lg leading-relaxed"
                     isSuperuser={isSuperuser}
                   />
-                  <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                  <div className="blog-divider flex items-center justify-between pt-4 border-t">
                     <EditableText
                       value={post.date}
                       contentKey={`blog_post_${post.id}_date`}
                       page="blog"
                       tag="span"
-                      className="text-sm text-gray-500 font-medium"
+                      className="page-text-meta text-sm font-medium"
                       isSuperuser={isSuperuser}
                     />
                     <button className="group/btn relative bg-gradient-to-r from-red-600 to-pink-600 text-white px-6 py-3 rounded-full font-bold text-sm shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:scale-110 active:scale-95 overflow-hidden">

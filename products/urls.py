@@ -5,7 +5,7 @@ from .views import ProductViewSet, UserProfileViewSet, OrderViewSet, AuthViewSet
 router = DefaultRouter()
 router.register(r'products', ProductViewSet)
 router.register(r'profiles', UserProfileViewSet)
-router.register(r'orders', OrderViewSet)
+router.register(r'orders', OrderViewSet, basename='order')
 router.register(r'auth', AuthViewSet, basename='auth')
 router.register(r'new-items', NewItemViewSet)
 router.register(r'editable-content', EditableContentViewSet)

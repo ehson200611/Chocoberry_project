@@ -11,7 +11,7 @@ from django.core.files.storage import default_storage
 from django.conf import settings
 import os
 from datetime import datetime
-from .models import Product, UserProfile, Order, NewItem, EditableContent
+from .models import Product, UserProfile, Order, NewItem, EditableContent, ChatMessage
 from .serializers import (
     ProductSerializer, 
     UserProfileSerializer, 
@@ -23,7 +23,8 @@ from .serializers import (
     NewItemSerializer,
     EditableContentSerializer
 )
-from .telegram_service import send_order_to_telegram
+from .telegram_service import send_order_to_telegram, update_order_message, answer_callback, set_webhook, notify_admin_new_message, test_support_bot
+import json
 
 @method_decorator(csrf_exempt, name='dispatch')
 class ProductViewSet(viewsets.ModelViewSet):
@@ -60,6 +61,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UserProfileViewSet(viewsets.ModelViewSet):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
@@ -173,11 +175,21 @@ class UserProfileViewSet(viewsets.ModelViewSet):
             )
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class OrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.all()
     serializer_class = OrderSerializer
-    permission_classes = [AllowAny]  # Разрешаем всем создавать заказы
-    
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        """Возвращаем заказы только текущего пользователя"""
+        if self.request.user.is_authenticated:
+            try:
+                profile = self.request.user.profile
+                return Order.objects.filter(user_profile=profile).order_by('-created_at')
+            except UserProfile.DoesNotExist:
+                pass
+        return Order.objects.none()
+
     def create(self, request, *args, **kwargs):
         # Если пользователь авторизован и имеет профиль, используем данные из профиля
         if request.user.is_authenticated:
@@ -374,11 +386,32 @@ class AuthViewSet(viewsets.ViewSet):
                     'message': 'Вход выполнен успешно'
                 }, status=status.HTTP_200_OK)
             except Exception as e:
+                import traceback
+                traceback.print_exc()
                 return Response(
                     {'error': f'Ошибка при входе: {str(e)}'},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Обработка ошибок валидации
+        error_message = "Неверный номер телефона или пароль"
+        if serializer.errors:
+            # Если ошибка - словарь
+            if isinstance(serializer.errors, dict):
+                non_field_errors = serializer.errors.get('non_field_errors', [])
+                if non_field_errors:
+                    error_message = non_field_errors[0] if isinstance(non_field_errors, list) else str(non_field_errors)
+                else:
+                    # Берем первую ошибку
+                    first_key = list(serializer.errors.keys())[0]
+                    first_error = serializer.errors[first_key]
+                    if isinstance(first_error, list):
+                        error_message = first_error[0]
+                    else:
+                        error_message = str(first_error)
+            else:
+                error_message = str(serializer.errors)
+        
+        return Response({'error': error_message}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['post'])
     def logout(self, request):
@@ -386,6 +419,293 @@ class AuthViewSet(viewsets.ViewSet):
         logout(request)
         return Response({'message': 'Выход выполнен успешно'}, status=status.HTTP_200_OK)
     
+    @action(detail=False, methods=['get'])
+    def admin_stats(self, request):
+        """Статистика для суперадминов: кол-во пользователей и заказов"""
+        if not request.user.is_authenticated or not request.user.is_superuser:
+            return Response(
+                {'error': 'Доступ запрещён'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        total_users = User.objects.count()
+        total_orders = Order.objects.count()
+        return Response({
+            'total_users': total_users,
+            'total_orders': total_orders,
+        })
+
+    @action(detail=False, methods=['get'])
+    def admin_all_orders(self, request):
+        """Все заказы для суперадмина"""
+        if not request.user.is_authenticated or not request.user.is_superuser:
+            return Response({'error': 'Доступ запрещён'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            from django.db.models import Sum
+            orders = Order.objects.select_related('user_profile').order_by('-created_at')
+            data = []
+            for o in orders:
+                try:
+                    profile = o.user_profile
+                    name    = profile.name    if profile else '—'
+                    phone   = profile.phone   if profile else '—'
+                    address = profile.address if profile else '—'
+                except Exception:
+                    name = phone = address = '—'
+                try:
+                    items = o.items if o.items else []
+                except Exception:
+                    items = []
+                data.append({
+                    'id': o.id,
+                    'name': name,
+                    'phone': phone,
+                    'address': address,
+                    'items': items,
+                    'total_price': str(o.total_price),
+                    'status': o.status,
+                    'created_at': o.created_at.strftime('%d.%m.%Y %H:%M'),
+                })
+            total_sum = orders.aggregate(s=Sum('total_price'))['s'] or 0
+            return Response({
+                'orders': data,
+                'total': len(data),
+                'total_sum': str(total_sum),
+                'pending': orders.filter(status='pending').count(),
+                'completed': orders.filter(status='completed').count(),
+            })
+        except Exception as e:
+            return Response({'error': str(e), 'orders': [], 'total': 0, 'total_sum': '0', 'pending': 0, 'completed': 0}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def admin_all_users(self, request):
+        """Все пользователи для суперадмина"""
+        if not request.user.is_authenticated or not request.user.is_superuser:
+            return Response({'error': 'Доступ запрещён'}, status=status.HTTP_403_FORBIDDEN)
+        from django.db.models import Sum, Count
+        users = User.objects.prefetch_related('profile__orders').order_by('-date_joined')
+        data = []
+        for u in users:
+            try:
+                p = u.profile
+                orders_count = p.orders.count()
+                orders_sum = p.orders.aggregate(s=Sum('total_price'))['s'] or 0
+                name = p.name
+                phone = p.phone
+                address = p.address
+                photo_url = request.build_absolute_uri(p.photo.url) if p.photo else None
+            except Exception:
+                orders_count, orders_sum = 0, 0
+                name, phone, address, photo_url = '', '', '', None
+            data.append({
+                'id': u.id,
+                'username': u.username,
+                'email': u.email,
+                'name': name,
+                'phone': phone,
+                'address': address,
+                'photo_url': photo_url,
+                'is_superuser': u.is_superuser,
+                'is_active': u.is_active,
+                'orders_count': orders_count,
+                'orders_sum': str(orders_sum),
+                'date_joined': u.date_joined.strftime('%d.%m.%Y'),
+            })
+        return Response({'users': data, 'total': len(data)})
+
+    @action(detail=False, methods=['patch'])
+    def admin_update_order_status(self, request):
+        """Обновить статус заказа (только для суперадмина)"""
+        if not request.user.is_authenticated or not request.user.is_superuser:
+            return Response({'error': 'Доступ запрещён'}, status=status.HTTP_403_FORBIDDEN)
+        order_id = request.data.get('order_id')
+        new_status = request.data.get('status')
+        if not order_id or not new_status:
+            return Response({'error': 'order_id и status обязательны'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            order = Order.objects.select_related('user_profile').get(id=order_id)
+            order.status = new_status
+            order.save()
+            # Обновляем сообщение в Telegram
+            try:
+                update_order_message(order, order.user_profile, new_status)
+            except Exception:
+                pass
+            return Response({'success': True, 'id': order_id, 'status': new_status})
+        except Order.DoesNotExist:
+            return Response({'error': 'Заказ не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+    # ─── CHAT ──────────────────────────────────────────────────
+    @action(detail=False, methods=['get', 'post'])
+    def my_chat(self, request):
+        """Клиент: получить/отправить сообщения чата"""
+        if not request.user.is_authenticated:
+            return Response({'error': 'Требуется авторизация'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if request.method == 'GET':
+            # Отмечаем сообщения от admin как прочитанные
+            ChatMessage.objects.filter(user=request.user, sender='admin', is_read=False).update(is_read=True)
+            msgs = ChatMessage.objects.filter(user=request.user).order_by('created_at')
+            data = [{'id': m.id, 'message': m.message, 'sender': m.sender,
+                     'created_at': m.created_at.strftime('%H:%M'), 'is_read': m.is_read} for m in msgs]
+            return Response({'messages': data})
+
+        # POST — отправить сообщение
+        text = (request.data.get('message') or '').strip()
+        if not text:
+            return Response({'error': 'Сообщение пустое'}, status=status.HTTP_400_BAD_REQUEST)
+        msg = ChatMessage.objects.create(user=request.user, message=text, sender='client')
+        try:
+            notify_admin_new_message(request.user, text)
+        except Exception as e:
+            print(f"Error sending Telegram notification: {e}")
+            import traceback
+            traceback.print_exc()
+        return Response({'id': msg.id, 'message': msg.message, 'sender': 'client',
+                         'created_at': msg.created_at.strftime('%H:%M')})
+
+    @action(detail=False, methods=['get'])
+    def chat_unread(self, request):
+        """Кол-во непрочитанных сообщений от admin для текущего клиента"""
+        if not request.user.is_authenticated:
+            return Response({'count': 0})
+        count = ChatMessage.objects.filter(user=request.user, sender='admin', is_read=False).count()
+        return Response({'count': count})
+
+    @action(detail=False, methods=['get'])
+    def admin_chats(self, request):
+        """Список всех пользователей с чатами (для суперадмина)"""
+        if not request.user.is_authenticated or not request.user.is_superuser:
+            return Response({'error': 'Доступ запрещён'}, status=status.HTTP_403_FORBIDDEN)
+        from django.db.models import Count, Max, Q
+        users = (User.objects
+                 .filter(chat_messages__isnull=False)
+                 .distinct()
+                 .annotate(
+                     unread=Count('chat_messages', filter=Q(chat_messages__sender='client', chat_messages__is_read=False)),
+                     last_time=Max('chat_messages__created_at'))
+                 .order_by('-last_time'))
+        data = []
+        for u in users:
+            last = ChatMessage.objects.filter(user=u).order_by('-created_at').first()
+            try:
+                name = u.profile.name or u.username
+                phone = u.profile.phone or ''
+            except Exception:
+                name = u.username
+                phone = ''
+            data.append({
+                'user_id': u.id,
+                'username': u.username,
+                'name': name,
+                'phone': phone,
+                'unread': u.unread,
+                'last_message': last.message[:60] if last else '',
+                'last_time': last.created_at.strftime('%H:%M') if last else '',
+                'last_sender': last.sender if last else '',
+            })
+        return Response({'chats': data})
+
+    @action(detail=False, methods=['get', 'post'])
+    def admin_chat_messages(self, request):
+        """Суперадмин: получить историю / ответить пользователю"""
+        if not request.user.is_authenticated or not request.user.is_superuser:
+            return Response({'error': 'Доступ запрещён'}, status=status.HTTP_403_FORBIDDEN)
+        user_id = request.query_params.get('user_id') or request.data.get('user_id')
+        if not user_id:
+            return Response({'error': 'user_id обязателен'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            target = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'GET':
+            ChatMessage.objects.filter(user=target, sender='client', is_read=False).update(is_read=True)
+            msgs = ChatMessage.objects.filter(user=target).order_by('created_at')
+            try:
+                name = target.profile.name or target.username
+            except Exception:
+                name = target.username
+            data = [{'id': m.id, 'message': m.message, 'sender': m.sender,
+                     'created_at': m.created_at.strftime('%H:%M %d.%m'), 'is_read': m.is_read} for m in msgs]
+            return Response({'messages': data, 'user_name': name, 'user_id': target.id})
+
+        # POST — reply
+        text = (request.data.get('message') or '').strip()
+        if not text:
+            return Response({'error': 'Сообщение пустое'}, status=status.HTTP_400_BAD_REQUEST)
+        msg = ChatMessage.objects.create(user=target, message=text, sender='admin')
+        return Response({'id': msg.id, 'message': msg.message, 'sender': 'admin',
+                         'created_at': msg.created_at.strftime('%H:%M %d.%m')})
+
+    # ─── TELEGRAM WEBHOOK ─────────────────────────────────────
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    def telegram_webhook(self, request):
+        """Webhook от Telegram — обработка нажатий кнопок"""
+        try:
+            data = request.data if isinstance(request.data, dict) else json.loads(request.body)
+
+            # Обрабатываем callback_query (нажатие кнопки)
+            callback = data.get('callback_query')
+            if callback:
+                callback_id   = callback.get('id')
+                callback_data = callback.get('data', '')
+
+                # Формат: order_{order_id}_{status}
+                if callback_data.startswith('order_'):
+                    parts = callback_data.split('_', 2)
+                    if len(parts) == 3:
+                        _, order_id_str, new_status = parts
+                        try:
+                            order = Order.objects.select_related('user_profile').get(id=int(order_id_str))
+                            old_status = order.status
+                            order.status = new_status
+                            order.save()
+
+                            STATUS_LABELS = {
+                                'confirmed':  '✅ Одобрен',
+                                'preparing':  '🍳 Готовится',
+                                'delivering': '🚗 Доставляется',
+                                'completed':  '🎉 Завершён',
+                                'cancelled':  '❌ Отменён',
+                            }
+                            label = STATUS_LABELS.get(new_status, new_status)
+                            answer_callback(callback_id, f"{label} — Заказ #{order.id}")
+
+                            # Обновляем сообщение в группе
+                            update_order_message(order, order.user_profile, new_status)
+
+                        except Order.DoesNotExist:
+                            answer_callback(callback_id, "❌ Заказ не найден")
+                        except Exception as e:
+                            answer_callback(callback_id, "⚠️ Ошибка")
+                            print(f"Webhook order update error: {e}")
+                    else:
+                        answer_callback(callback_id)
+                else:
+                    answer_callback(callback_id)
+
+            return Response({'ok': True})
+        except Exception as e:
+            print(f"Webhook error: {e}")
+            return Response({'ok': False}, status=200)  # Always 200 for Telegram
+
+    @action(detail=False, methods=['get'])
+    def setup_webhook(self, request):
+        """Регистрирует webhook у Telegram (только суперадмин)"""
+        if not request.user.is_authenticated or not request.user.is_superuser:
+            return Response({'error': 'Доступ запрещён'}, status=403)
+        webhook_url = request.build_absolute_uri('/api/auth/telegram_webhook/')
+        result = set_webhook(webhook_url)
+        return Response(result)
+
+    @action(detail=False, methods=['get'])
+    def test_support_bot(self, request):
+        """Тест бота поддержки (только суперадмин)"""
+        if not request.user.is_authenticated or not request.user.is_superuser:
+            return Response({'error': 'Доступ запрещён'}, status=403)
+        result = test_support_bot()
+        return Response(result)
+
     @action(detail=False, methods=['get'])
     def me(self, request):
         """Получить текущего пользователя"""

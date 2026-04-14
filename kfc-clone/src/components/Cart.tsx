@@ -106,10 +106,10 @@ export default function Cart() {
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 animate-in fade-in duration-300"
+        className="fixed inset-0 bg-black/70 backdrop-blur-md z-[70] animate-in fade-in duration-300"
         onClick={() => setIsOpen(false)}
       />
-      <div className="fixed right-0 top-0 h-full w-full sm:max-w-md bg-white shadow-2xl z-50 overflow-y-auto animate-in slide-in-from-right duration-300">
+      <div className="fixed right-0 top-0 h-full w-full sm:max-w-md bg-white shadow-2xl z-[70] overflow-y-auto animate-in slide-in-from-right duration-300">
         <div className="sticky top-0 bg-gradient-to-r from-red-600 via-pink-600 to-red-600 text-white p-6 flex items-center justify-between shadow-lg z-10">
           <div className="flex items-center gap-3">
             <div className="bg-white/20 p-2 rounded-full">
@@ -156,10 +156,10 @@ export default function Cart() {
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {/* Показываем профиль пользователя, если он есть */}
           {userProfile && (
-            <div className="bg-gradient-to-br from-red-50 via-pink-50 to-rose-50 border-2 border-red-200 rounded-2xl p-5 mb-6 shadow-lg hover:shadow-xl transition-all duration-300">
+            <div className="bg-gradient-to-br from-red-50 via-pink-50 to-rose-50 border-2 border-red-200 rounded-2xl p-4 mb-5 shadow-lg hover:shadow-xl transition-all duration-300">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-red-900 text-lg flex items-center gap-2">
                   <div className="bg-gradient-to-r from-red-600 to-pink-600 p-2 rounded-full">
@@ -203,83 +203,71 @@ export default function Cart() {
 
           {cart.length === 0 ? (
             <div className="text-center py-20">
-              <div className="inline-block bg-gradient-to-br from-red-100 to-pink-100 p-8 rounded-full mb-6">
+              <div className="inline-block bg-gradient-to-br from-red-100 to-pink-100 p-8 rounded-full mb-6 shadow-inner">
                 <div className="text-7xl animate-bounce">🍓</div>
               </div>
               <p className="text-red-700 text-2xl font-bold mb-2">Корзина пуста</p>
-              <p className="text-red-600 text-lg">Добавьте что-нибудь сладкое!</p>
+              <p className="text-red-500 text-base">Добавьте что-нибудь сладкое! 🍫</p>
             </div>
           ) : (
             <>
-              <div className="space-y-4 mb-6">
+              <div className="space-y-3 mb-4">
                 {cart.map((item) => (
                   <div
                     key={item.id}
-                    className="group bg-gradient-to-br from-white to-red-50 rounded-2xl p-5 flex items-center gap-4 border-2 border-red-100 hover:border-red-300 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
+                    className="group bg-white rounded-2xl p-4 flex items-center gap-3 border border-red-100 hover:border-red-300 hover:shadow-lg transition-all duration-200 shadow-sm"
                   >
-                    <div className="bg-gradient-to-br from-red-100 to-pink-100 rounded-xl p-4 shadow-md group-hover:shadow-lg transition-shadow">
-                      <div className="text-4xl transform group-hover:scale-110 transition-transform duration-300">
-                        {getEmoji(item.name)}
-                      </div>
+                    {/* Иконка / эмодзи */}
+                    <div className="bg-gradient-to-br from-red-50 to-pink-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-sm flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
+                      <span className="text-3xl">{getEmoji(item.name)}</span>
                     </div>
+
+                    {/* Название + цена */}
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-red-900 text-lg mb-2 truncate">
+                      <h3 className="font-bold text-gray-800 text-sm sm:text-base leading-tight mb-1 truncate">
                         {item.name}
                       </h3>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-red-700 font-semibold">
-                          {item.price} сомони
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="text-red-500 font-semibold text-sm">
+                          {item.price} с.
                         </span>
-                        <span className="text-gray-400">×</span>
-                        <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-sm font-bold">
+                        <span className="text-gray-300 text-xs">×</span>
+                        <span className="text-gray-500 text-sm font-medium">
                           {item.quantity}
                         </span>
-                        <span className="text-gray-400">=</span>
-                        <span className="text-red-600 font-bold text-lg">
-                          {item.price * item.quantity} сомони
+                        <span className="text-gray-300 text-xs">=</span>
+                        <span className="text-red-600 font-extrabold text-sm">
+                          {item.price * item.quantity} с.
                         </span>
                       </div>
                     </div>
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="flex items-center gap-2 bg-white rounded-full p-1 shadow-md">
+
+                    {/* Контроль количества */}
+                    <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+                      <div className="flex items-center gap-1 bg-gray-50 rounded-xl border border-gray-200 p-0.5 shadow-inner">
                         <button
-                          onClick={() =>
-                            updateQuantity(item.id, item.quantity - 1)
-                          }
-                          className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-full w-9 h-9 flex items-center justify-center font-bold transition-all duration-300 transform hover:scale-110 active:scale-95 shadow-md"
+                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                          className="bg-gradient-to-b from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg w-8 h-8 flex items-center justify-center font-bold text-lg transition-all duration-200 active:scale-90 shadow"
                         >
                           −
                         </button>
-                        <span className="w-10 text-center font-bold text-red-900 text-lg">
+                        <span className="w-8 text-center font-extrabold text-gray-800 text-base">
                           {item.quantity}
                         </span>
                         <button
-                          onClick={() =>
-                            updateQuantity(item.id, item.quantity + 1)
-                          }
-                          className="bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white rounded-full w-9 h-9 flex items-center justify-center font-bold transition-all duration-300 transform hover:scale-110 active:scale-95 shadow-md"
+                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                          className="bg-gradient-to-b from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white rounded-lg w-8 h-8 flex items-center justify-center font-bold text-lg transition-all duration-200 active:scale-90 shadow"
                         >
                           +
                         </button>
                       </div>
                       <button
                         onClick={() => removeFromCart(item.id)}
-                        className="bg-red-100 hover:bg-red-200 text-red-700 p-2 rounded-lg transition-all duration-300 transform hover:scale-110 active:scale-95"
+                        className="flex items-center justify-center w-8 h-7 bg-red-50 hover:bg-red-100 text-red-400 hover:text-red-600 rounded-lg transition-all duration-200 active:scale-90 border border-red-100"
                         title="Удалить"
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
                     </div>
@@ -287,37 +275,44 @@ export default function Cart() {
                 ))}
               </div>
 
-              <div className="sticky bottom-0 bg-white border-t-4 border-red-200 pt-6 pb-6 mt-8 shadow-2xl -mx-6 px-6">
-                <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-2xl p-6 mb-4 border-2 border-red-200">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xl font-bold text-red-900">Итого:</span>
-                    <span className="text-3xl font-extrabold bg-gradient-to-r from-red-600 to-pink-600 bg-clip-text text-transparent">
+              {/* Итого + кнопки — зафиксированы внизу */}
+              <div className="sticky bottom-0 bg-white/95 backdrop-blur-sm border-t border-red-100 pt-4 pb-5 mt-4 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] -mx-4 sm:-mx-6 px-4 sm:px-6">
+                {/* Итого */}
+                <div className="flex items-center justify-between bg-gradient-to-r from-red-50 to-pink-50 rounded-2xl px-5 py-4 mb-3 border border-red-200 shadow-sm">
+                  <div>
+                    <p className="text-xs text-gray-400 font-medium mb-0.5">Сумма заказа</p>
+                    <span className="text-2xl font-extrabold bg-gradient-to-r from-red-600 to-pink-600 bg-clip-text text-transparent">
                       {totalPrice} сомони
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600 text-right">Доставка включена</p>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-400">Доставка</p>
+                    <p className="text-sm font-bold text-green-600">Включена ✓</p>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-3">
+
+                {/* Кнопки */}
+                <div className="flex gap-2">
                   <button
                     onClick={clearCart}
-                    className="w-full bg-red-100 hover:bg-red-200 text-red-800 py-3 rounded-xl font-bold text-base transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg border-2 border-red-200"
+                    className="flex items-center justify-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 px-4 py-3 rounded-xl font-semibold text-sm transition-all duration-200 active:scale-95 border border-red-200 flex-shrink-0"
                   >
-                    🗑️ Очистить корзину
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Очистить
                   </button>
                   <button
                     onClick={() => setShowOrderForm(true)}
-                    className="group relative w-full bg-gradient-to-r from-red-600 via-pink-600 to-red-600 text-white py-4 rounded-xl font-extrabold text-lg hover:from-red-700 hover:via-pink-700 hover:to-red-700 transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-2xl hover:shadow-red-300/50 overflow-hidden"
+                    className="group relative flex-1 bg-gradient-to-r from-red-600 to-pink-600 text-white py-3 rounded-xl font-extrabold text-base hover:from-red-700 hover:to-pink-700 transition-all duration-200 active:scale-95 shadow-lg shadow-red-200 overflow-hidden"
                   >
-                    <span className="relative z-10 flex items-center justify-center gap-3">
-                      <svg className="w-6 h-6 transform group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <span className="relative z-10 flex items-center justify-center gap-2">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      Оформить заказ
-                      <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                      </svg>
+                      Оформить заказ →
                     </span>
-                    <div className="absolute inset-0 bg-gradient-to-r from-pink-600 via-red-600 to-pink-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-pink-600 to-red-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   </button>
                 </div>
               </div>

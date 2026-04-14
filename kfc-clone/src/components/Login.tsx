@@ -71,17 +71,19 @@ export default function Login({ onClose, onSuccess, onSwitchToRegister }: LoginP
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Имя пользователя *
+              Телефон или логин *
             </label>
             <input
               type="text"
+              inputMode="text"
+              autoComplete="username"
               required
               value={formData.username}
               onChange={(e) =>
                 setFormData({ ...formData, username: e.target.value })
               }
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              placeholder="Введите имя пользователя"
+              placeholder="+992 501 07 77 03"
             />
           </div>
 
